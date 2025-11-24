@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 import time
 from go2_robot_data import PinGo2Model
+import mujoco.viewer as mjv
 
 class MuJoCo_GO2_Model:
     def __init__(self):
@@ -34,8 +35,6 @@ class MuJoCo_GO2_Model:
         while self.viewer.is_running():
             #mujoco.mj_step(self.model, self.data) #Comment this line for passive viewer
             self.viewer.sync()
-        
-
 
     def set_leg_joint_torque(self, leg: str, torque):
 
@@ -46,6 +45,69 @@ class MuJoCo_GO2_Model:
         self.data.ctrl[aid_hip] = torque[0]
         self.data.ctrl[aid_thigh] = torque[1]
         self.data.ctrl[aid_calf] = torque[2]
+
+    def replay_simulation(self, time_log_s, q_log, tau_log_Nm, RENDER_DT, REALTIME_FACTOR):
+        model = self.model
+        data_replay = mj.MjData(model)
+
+        with mjv.launch_passive(model, data_replay) as viewer:
+
+            # 1) Pick the body to track (change "base" to your torso/body name)
+            base_id = model.body("base_link").id   # or e.g. model.body("torso").id
+
+            # 2) Configure camera as a tracking camera
+            viewer.cam.type = mj.mjtCamera.mjCAMERA_TRACKING
+            viewer.cam.trackbodyid = base_id
+            viewer.cam.fixedcamid = -1       # not using a fixed camera slot
+
+            # Optional: nice initial view
+            viewer.cam.distance = 2.0        # how far from the body
+            viewer.cam.elevation = -20       # vertical angle (deg)
+            viewer.cam.azimuth = 90          # horizontal angle (deg)
+
+            viewer.opt.flags[mj.mjtVisFlag.mjVIS_CONTACTPOINT] = True
+
+
+            while viewer.is_running():           # loop until the window is closed
+
+                start_wall = time.perf_counter()
+                t0 = time_log_s[0]
+                next_render_t = t0
+
+                k = 0
+                T = len(time_log_s)
+
+                # One full replay
+                while k < T and viewer.is_running():
+                    t = time_log_s[k]
+
+                    # time to render a frame?
+                    if t >= next_render_t:
+                        data_replay.qpos[:] = q_log[k]
+                        data_replay.ctrl[:] = tau_log_Nm[k]
+                        mj.mj_forward(model, data_replay)
+                        viewer.sync()
+
+                        # real-time pacing
+                        target_wall = start_wall + (t - t0) / REALTIME_FACTOR
+                        now = time.perf_counter()
+                        sleep_time = target_wall - now# 2) Compute the dynamics and desir ed trajectory
+
+                        if sleep_time > 0:
+                            time.sleep(sleep_time)
+
+                        next_render_t += RENDER_DT
+
+                    k += 1
+
+                time.sleep(1)
+
+    def set_joint_torque(self, torque):
+
+        self.set_leg_joint_torque("FL", torque[0:3])
+        self.set_leg_joint_torque("FR", torque[3:6])
+        self.set_leg_joint_torque("RL", torque[6:9])
+        self.set_leg_joint_torque("RR", torque[9:12])
 
     def get_leg_joint_pos(self, leg: str):
 
@@ -83,39 +145,6 @@ class MuJoCo_GO2_Model:
 
         return v_leg
     
-    def run_sim(self, torque, control_hz):
-
-        self.model.opt.timestep = 1.0 / control_hz
-        dt = self.model.opt.timestep
-        render_hz  = 60
-        steps_per_render = max(1, int(control_hz // render_hz))
-        next_t = time.perf_counter()
-
-        self.start_viewer()
-        i = 0
-        print(f"Running simulation at {control_hz} Hz (dt={dt:.6f}s)...")
-
-        while self.viewer.is_running():
-            mj.mj_step1(self.model, self.data)
-            self.set_leg_joint_torque("FL", torque[0:2])
-            self.set_leg_joint_torque("FR", torque[3:5])
-            self.set_leg_joint_torque("RL", torque[6:8])
-            self.set_leg_joint_torque("RR", torque[9:11])
-            mj.mj_step2(self.model, self.data)
-
-            if (i % steps_per_render) == 0:
-                self.viewer.sync()
-
-            next_t += dt
-            sleep = next_t - time.perf_counter()
-            if sleep > 0:
-                time.sleep(sleep)
-            else:
-                # fell behind, reset clock
-                next_t = time.perf_counter()
-
-            i += 1
-
     def update_pin_with_mujoco(self, go2:PinGo2Model):
 
         mujoco_q  = np.asarray(self.data.qpos, dtype=float).reshape(-1)   # (19,)
