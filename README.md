@@ -10,7 +10,7 @@ As of 11/26/2025, the controller is capable of full 2D motion and yaw rotation
 
 ## 🐾 Introduction
 
-This repository contains a full implementation of a **Convex Model Predictive Controller (MPC)** for the Unitree Go2 quadruped robot.  
+This repository contains a partial implementation of a **Convex Model Predictive Controller (MPC)** for the Unitree Go2 quadruped robot.  
 The controller is designed following the methodology described in the MIT publication:
 
 > **"Dynamic Locomotion in the MIT Cheetah 3 Through Convex Model-Predictive Control"**  
