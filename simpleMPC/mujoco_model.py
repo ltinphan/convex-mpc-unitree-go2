@@ -5,46 +5,67 @@ from pathlib import Path
 import time
 from go2_robot_data import PinGo2Model
 import mujoco.viewer as mjv
+import pinocchio as pin
+
+# --------------------------------------------------------------------------------
+# MuJoCo Model Setting
+# --------------------------------------------------------------------------------
+
+REPO = Path(__file__).resolve().parents[1]
+XML_PATH = REPO / "unitree_mujoco" / "unitree_robots" / "go2" / "scene.xml"
 
 class MuJoCo_GO2_Model:
     def __init__(self):
-        # Set this to your MJCF file directory
-        repo = Path(__file__).resolve().parents[1]
-        scene_path = repo / "unitree_mujoco" / "unitree_robots" / "go2" / "scene.xml"
-
         # Load the MuJoCo model
-        self.model = mj.MjModel.from_xml_path(str(scene_path))
+        self.model = mj.MjModel.from_xml_path(str(XML_PATH))
         self.data = mj.MjData(self.model)
         self.viewer = None
-
-        self.base_bid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, "base_link")
+        self.base_bid = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_BODY, "base_link")
 
     def update_with_q_pin(self, q_pin):
         px, py, pz, qx, qy, qz, qw, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12 = q_pin[:]
         self.data.qpos[:] = [px, py, pz, qw, qx, qy, qz, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12]
-        # self.data.qpos[:3] = q_pin[:3]
-        # self.data.qpos[6:] = q_pin[6:]
-
-        mj.mj_forward(self.model, self.data)   # recompute derived quantities
-
-    def start_viewer(self):
-        self.viewer = mj.viewer.launch_passive(self.model, self.data).__enter__()
-        self.viewer.sync()
-
-    def hold_viewer(self):
-        while self.viewer.is_running():
-            #mujoco.mj_step(self.model, self.data) #Comment this line for passive viewer
-            self.viewer.sync()
+        mj.mj_forward(self.model, self.data)
 
     def set_leg_joint_torque(self, leg: str, torque):
-
+        # Get joint ID
         aid_hip = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_ACTUATOR, f"{leg}_hip")
         aid_thigh = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_ACTUATOR, f"{leg}_thigh")
         aid_calf = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_ACTUATOR, f"{leg}_calf")
 
+        # Set joint torque
         self.data.ctrl[aid_hip] = torque[0]
         self.data.ctrl[aid_thigh] = torque[1]
         self.data.ctrl[aid_calf] = torque[2]
+
+    def set_joint_torque(self, torque):
+        # Set joint torque
+        self.set_leg_joint_torque("FL", torque[0:3])
+        self.set_leg_joint_torque("FR", torque[3:6])
+        self.set_leg_joint_torque("RL", torque[6:9])
+        self.set_leg_joint_torque("RR", torque[9:12])
+    
+    def update_pin_with_mujoco(self, go2:PinGo2Model):
+
+        # Mujoco q has different ordering from the pinocchio q
+        # In addition, mujoco dq stores velocity in world frame, while pinocchio stores in body frame
+        # Both mujoco and pinocchio stores body frame angular velocity
+
+        mujoco_q  = np.asarray(self.data.qpos, dtype=float).reshape(-1)   # (19,)
+        mujoco_dq = np.asarray(self.data.qvel, dtype=float).reshape(-1)   # (18,)
+        qw, qx, qy, qz = mujoco_q[3:7]
+        # pin.Quaternion uses qw qx qy qz
+        R = pin.Quaternion(qw, qx, qy, qz).toRotationMatrix()  # body -> world 
+        v_world = mujoco_dq[0:3]
+        w_body = mujoco_dq[3:6]
+        v_body = R.T @ v_world
+
+        # Convert to Pin
+        # configuration uses qx qy qz qw
+        q_pin  = np.concatenate([mujoco_q[0:3], [qx, qy, qz, qw], mujoco_q[7:]])
+        dq_pin = np.concatenate([v_body, w_body, mujoco_dq[6:]])
+
+        go2.update_model(q_pin, dq_pin)
 
     def replay_simulation(self, time_log_s, q_log, tau_log_Nm, RENDER_DT, REALTIME_FACTOR):
         model = self.model
@@ -101,69 +122,3 @@ class MuJoCo_GO2_Model:
                     k += 1
 
                 time.sleep(1)
-
-    def set_joint_torque(self, torque):
-
-        self.set_leg_joint_torque("FL", torque[0:3])
-        self.set_leg_joint_torque("FR", torque[3:6])
-        self.set_leg_joint_torque("RL", torque[6:9])
-        self.set_leg_joint_torque("RR", torque[9:12])
-
-    def get_leg_joint_pos(self, leg: str):
-
-        q_leg = np.zeros(3, dtype=float)
-
-        jid_hip = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_hip_joint")
-        jid_thigh = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_thigh_joint")
-        jid_calf = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_calf_joint")
-
-        q_idx_hip = self.model.jnt_qposadr[jid_hip]
-        q_idx_thigh = self.model.jnt_qposadr[jid_thigh]
-        q_idx_calf = self.model.jnt_qposadr[jid_calf]
-
-        q_leg[0] = float(self.data.qpos[q_idx_hip])
-        q_leg[1] = float(self.data.qpos[q_idx_thigh])
-        q_leg[2] = float(self.data.qpos[q_idx_calf])
-
-        return q_leg
-    
-    def get_leg_joint_vel(self, leg: str):
-
-        v_leg = np.zeros(3, dtype=float)
-
-        jid_hip = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_hip_joint")
-        jid_thigh = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_thigh_joint")
-        jid_calf = mj.mj_name2id(self.model, mj.mjtObj.mjOBJ_JOINT, f"{leg}_calf_joint")
-
-        v_idx_hip = self.model.jnt_dofadr[jid_hip]
-        v_idx_thigh = self.model.jnt_dofadr[jid_thigh]
-        v_idx_calf = self.model.jnt_dofadr[jid_calf]
-
-        v_leg[0] = float(self.data.qpos[v_idx_hip])
-        v_leg[1] = float(self.data.qpos[v_idx_thigh])
-        v_leg[2] = float(self.data.qpos[v_idx_calf])
-
-        return v_leg
-    
-    def update_pin_with_mujoco(self, go2:PinGo2Model):
-
-        mujoco_q  = np.asarray(self.data.qpos, dtype=float).reshape(-1)   # (19,)
-        mujoco_dq = np.asarray(self.data.qvel, dtype=float).reshape(-1)   # (18,)
-        qw, qx, qy, qz = mujoco_q[3:7]
-
-        # Convert to Pin
-        q  = np.concatenate([mujoco_q[0:3], [qx, qy, qz, qw], mujoco_q[7:]])
-        dq = mujoco_dq
-
-        go2.update_model(q, dq)
-
-
-
-
-
-
-
-
-
-
-
