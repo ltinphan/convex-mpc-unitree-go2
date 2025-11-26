@@ -1,5 +1,5 @@
 # MPC Locomotion Control of the Unitree Go2 Quadruped Robot in MuJoCo
-This repository implements a full **convex Model Predictive Controller (MPC)** for the **Unitree Go2 quadruped robot**, including **contact-force optimization**, **centroidal dynamics**, and **MuJoCo simulation**.
+This repository implements a full **Convex Model Predictive Controller (MPC)** for the **Unitree Go2 quadruped robot**, including **contact-force optimization**, **centroidal dynamics**, and **MuJoCo simulation**.
 
 
 Developed as part of the **UC Berkeley Master of Engineering (MEng)** capstone project in Mechanical Engineering.
@@ -81,8 +81,8 @@ Together, these libraries form the computational backbone of the control and sim
 ## Installation and Dependencies
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/elijah-waichong-chan/ConvexMPC-unitree-go2.git
-cd simpleMPC-unitree-go2
+git clone https://github.com/elijah-waichong-chan/convex-mpc-unitree-go2.git
+cd convex-mpc-unitree-go2
 ```
 
 ### 2. Create a Conda environment
@@ -100,7 +100,7 @@ cp -r unitree_mujoco ./third_party/unitree_mujoco
 
 Your repo structure should now look like:
 ```
-simpleMPC-unitree-go2/
+convex-mpc-unitree-go2/
 └── third_party/
     └── unitree_mujoco/
 ```
@@ -134,7 +134,7 @@ cp -r Go2_URDF/go2_description ./third_party/unitree_go2_description
 
 Your directory structure should now include:
 ```
-simpleMPC-unitree-go2/
+convex-mpc-unitree-go2/
 └── third_party/
     ├── unitree_mujoco/
     └── unitree_go2_description/
