@@ -12,7 +12,7 @@ import time
 COST_MATRIX_Q = np.diag([1, 1, 50,  10, 10, 1,  5, 5, 1,  1, 1, 1])     # State cost weight matrix
 COST_MATRIX_R = np.diag([1e-6] * 12)                                    # Input cost weight matrix
 
-MU = 0.7    # Friction coefficient
+MU = 0.8    # Friction coefficient
 NX = 12     # State size (6-DOF 12 states)
 NU = 12     # Input size (4 x 3D force)
 M = 1000    # Used for trivial friction constraint for swing leg
