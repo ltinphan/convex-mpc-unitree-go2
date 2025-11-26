@@ -57,12 +57,14 @@ Together, these libraries form the computational backbone of the control and sim
 
 ---
 
-## Environment Setup
+```markdown
+## Installation and Dependencies
 ### 1. Clone the repository
 ```bash
 git clone https://github.com/elijah-waichong-chan/simpleMPC-unitree-go2.git
 cd simpleMPC-unitree-go2
 ```
+
 ### 2. Create a Conda environment
 ```bash
 conda create -n go2 python=3.10.15 -y
@@ -118,6 +120,24 @@ simpleMPC-unitree-go2/
     └── unitree_go2_description/
 ```
 
+### 5. Install MuJoCo
+ ---
+
+### 6. Install Pinocchio
+Pinocchio is required for kinematics, dynamics, and centroidal model computations.
+
+Install via conda:
+```bash
+conda install pinocchio -c conda-forge
+```
+
+### 7. Install CasAdi
+CasADi is used for building and solving the MPC optimization problems.
+
+Install via conda:
+```bash
+conda install casadi -c conda-forge
+```
 
 ## 🦿 Controller Overview
 
