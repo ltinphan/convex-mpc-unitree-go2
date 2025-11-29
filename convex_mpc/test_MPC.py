@@ -10,7 +10,7 @@ from centroidal_mpc import CentroidalMPC
 from leg_controller import LegController
 from gait import Gait
 
-from plot_helper import plot_mpc_result, plot_swing_foot_traj, plot_full_traj, plot_solve_time
+from plot_helper import plot_mpc_result, plot_swing_foot_traj, plot_full_traj, plot_solve_time, hold_until_all_fig_closed
 
 # --------------------------------------------------------------------------------
 # Parameters
@@ -23,6 +23,28 @@ RUN_SIM_LENGTH_S = 10                # Adjust this to change the duration of sim
 RENDER_HZ = 120.0                   # Adjust this to change the replay redering rate
 RENDER_DT = 1.0 / RENDER_HZ         # Time step of the simulation replay
 REALTIME_FACTOR = 1                 # Adjust this to change the replay speed (1 = realtime)
+
+# Locomotion Command
+@dataclass
+class BodyCmdPhase:
+    t_start: float
+    t_end: float
+    x_vel: float
+    y_vel: float
+    z_pos: float
+    yaw_rate: float
+
+CMD_SCHEDULE = [
+BodyCmdPhase(0.0, 1.0,  0.7, 0.0, 0.27, 0.0),   # Forward 0.7 m/s
+BodyCmdPhase(1.0, 1.5,  0.0, 0.0, 0.27, 0.0),   # Stop
+BodyCmdPhase(1.5, 3.0,  0.0, 0.3, 0.27, 0.0),   # Sideway 0.3 m/s
+BodyCmdPhase(3.0, 4.0,  0.0, 0.0, 0.27, 0.0),   # Stop
+BodyCmdPhase(4.0, 6.0,  0.0, 0.0, 0.27, 2.0),   # Rotate 2 rad/s
+BodyCmdPhase(6.0, 6.5,  0.0, 0.0, 0.27, 0.0),   # Stop
+BodyCmdPhase(6.5, 8.0,  0.6, 0.0, 0.27, 2.0),   # Forward 0.6 m/s + Rotate 2 rad/s
+BodyCmdPhase(8.0, 9.0,  0.8, 0.0, 0.27, 0.0),   # Forward 0.8 m/s
+BodyCmdPhase(9.0, 10.0,  0.0, 0.0, 0.27, 0.0),  # Stop
+]
 
 # Gait Setting
 GAIT_HZ = 3             # Adjust this to change the frequency of the gait
@@ -43,7 +65,7 @@ leg_ctrl_i = 0                                          # Iteration counter
 
 # Relation between MPC loop and Leg controller loop
 MPC_DT = GAIT_T / 16                                    # Time step of the MPC Controlnqler as 1/16 of the gait period
-MPC_HZ = 1/MPC_DT                                       # MPC update rate
+MPC_HZ = 1 / MPC_DT                                       # MPC update rate
 STEPS_PER_MPC = max(1, int(LEG_CTRL_HZ // MPC_HZ))      # Number of steps the leg controller runs before the MPC is called
 
 TAU_MAX = 45
@@ -54,6 +76,20 @@ LEG_SLICE = {
     "RL": slice(6, 9),
     "RR": slice(9, 12),
 }
+# --------------------------------------------------------------------------------
+# Helper Function
+# --------------------------------------------------------------------------------
+def get_body_cmd(t: float):
+    for phase in CMD_SCHEDULE:
+        if phase.t_start <= t < phase.t_end:
+            return (
+                phase.x_vel,
+                phase.y_vel,
+                phase.z_pos,
+                phase.yaw_rate,
+            )
+    # default command after last phase
+    return 0.0, 0.0, 0.27, 0.0
 
 # --------------------------------------------------------------------------------
 # Storage Variables
@@ -124,60 +160,7 @@ sim_start_time = time.perf_counter()
 while leg_ctrl_i < LEG_CTRL_I_END:
 
     time_now_s = mujoco_go2.data.time   # Current time in simulation
-
-    if(time_now_s) < 2:
-        x_vel_des_body = 0
-        y_vel_des_body = 0
-        z_pos_des_body = 0.27
-        yaw_rate_des_body = 1
-
-    elif(time_now_s) < 3:
-        x_vel_des_body = 0
-        y_vel_des_body = 0
-        z_pos_des_body = 0.27
-        yaw_rate_des_body = 0
-
-    elif(time_now_s) < 4:
-        x_vel_des_body = 0.5
-        y_vel_des_body = 0
-        z_pos_des_body = 0.27
-        yaw_rate_des_body = 0
-
-    elif(time_now_s) < 6:
-        x_vel_des_body = 0
-        y_vel_des_body = 0
-        z_pos_des_body = 0.27
-        yaw_rate_des_body = 0
-
-    # elif(time_now_s) < 5:
-    #     x_vel_des = 0
-    #     y_vel_des = 0
-    #     z_pos_des = 0.27
-    #     yaw_rate_des = -0.6
-
-    # elif(time_now_s) < 6:
-    #     x_vel_des = 0
-    #     y_vel_des = 0
-    #     z_pos_des = 0.27
-    #     yaw_rate_des = 0
-
-    # elif(time_now_s) < 7:
-    #     x_vel_des = 0
-    #     y_vel_des = 0
-    #     z_pos_des = 0.27
-    #     yaw_rate_des = 0
-
-    # elif(time_now_s) < 8:
-    #     x_vel_des = 0.3
-    #     y_vel_des = -0.3
-    #     z_pos_des = 0.27
-    #     yaw_rate_des = 0
-
-    # elif(time_now_s) < 9:
-    #     x_vel_des = 0
-    #     y_vel_des = 0
-    #     z_pos_des = 0.27
-    #     yaw_rate_des = 0
+    x_vel_des_body, y_vel_des_body, z_pos_des_body, yaw_rate_des_body = get_body_cmd(time_now_s)    # Update Locomotion Command
 
     # 1) Update Pinocchio model with MuJuCo data
     mujoco_go2.update_pin_with_mujoco(go2)
@@ -186,11 +169,10 @@ while leg_ctrl_i < LEG_CTRL_I_END:
     # 2) Log current robot configuration in MuJoCo
     time_log_s[leg_ctrl_i] = time_now_s
     q_log[leg_ctrl_i, :] = mujoco_go2.data.qpos
-    # ------------------------------
 
     # 3) Update MPC if needed
     if (leg_ctrl_i % STEPS_PER_MPC) == 0:
-        print("Time:", time_now_s)
+        print(f"\rSimulation Time: {time_now_s:.3f} s", end="", flush=True)
 
         # 3.1) Update reference trajectory 
         traj.generate_traj(go2, gait, time_now_s, 
@@ -254,7 +236,8 @@ while leg_ctrl_i < LEG_CTRL_I_END:
     leg_ctrl_i += 1
 
 sim_end_time = time.perf_counter()
-print(f"Simulation ended. Duration: {sim_end_time - sim_start_time}s")
+print(f"\nSimulation ended."
+      f"\nElapsed time: {sim_end_time - sim_start_time:.3f}s")
 
 # --------------------------------------------------------------------------------
 # Simulation Results
@@ -262,14 +245,15 @@ print(f"Simulation ended. Duration: {sim_end_time - sim_start_time}s")
 
 # Plot results
 t_vec = np.arange(LEG_CTRL_I_END) * LEG_CTRL_DT
+plot_swing_foot_traj(t_vec, foot_traj, False)
 plot_mpc_result(t_vec, mpc_force_world, tau_cmd, x_vec, block=False)
-plot_solve_time(mpc_solve_time_ms, mpc_update_time_ms, MPC_DT, MPC_HZ, True)
-# plot_swing_foot_traj(t_vec, foot_traj, False)
+plot_solve_time(mpc_solve_time_ms, mpc_update_time_ms, MPC_DT, MPC_HZ, block=False)
 
-# # Replay simulation
+# Replay simulation
 mujoco_go2.replay_simulation(time_log_s, q_log, tau_log_Nm, RENDER_DT, REALTIME_FACTOR)
+hold_until_all_fig_closed()
 
-# # # # # # 5) Run simulation with optimal input
+# Run simulation with optimal input
 # x0_col = go2.compute_com_x_vec()
 # traj_ref = np.hstack([x0_col, traj.compute_x_ref_vec()])
 # traj_act = np.hstack([x0_col, X_opt])
