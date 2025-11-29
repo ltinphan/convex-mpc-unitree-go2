@@ -2,6 +2,8 @@ import time
 import mujoco as mj
 import numpy as np
 from dataclasses import dataclass
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for macOS compatibility
 
 from go2_robot_data import PinGo2Model
 from mujoco_model import MuJoCo_GO2_Model

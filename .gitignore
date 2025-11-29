@@ -3,7 +3,13 @@
 /convex_mpc/__pycache__
 /Miniconda3-latest-MacOSX-arm64.sh
 /docs
-/unitree_mujoco/
-/go2_description/
-/third_party/
+/venv/
+*.pyc
 
+# Downloaded files
+Go2_URDF.zip
+unitree_mujoco/
+GO2_URDF/
+
+# Exclude history folders from third-party packages
+third_party/**/.history/
