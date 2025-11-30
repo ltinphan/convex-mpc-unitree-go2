@@ -13,3 +13,6 @@ GO2_URDF/
 
 # Exclude history folders from third-party packages
 third_party/**/.history/
+
+# Simulation results
+simulation_results/

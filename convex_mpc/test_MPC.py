@@ -2,8 +2,11 @@ import time
 import mujoco as mj
 import numpy as np
 from dataclasses import dataclass
+import os
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for macOS compatibility
+# Save plots to files instead of displaying to avoid threading issues with mjpython
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 from go2_robot_data import PinGo2Model
 from mujoco_model import MuJoCo_GO2_Model
@@ -13,6 +16,10 @@ from leg_controller import LegController
 from gait import Gait
 
 from plot_helper import plot_mpc_result, plot_swing_foot_traj, plot_full_traj, plot_solve_time, hold_until_all_fig_closed
+
+# Create output directory for plots
+OUTPUT_DIR = "simulation_results"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # --------------------------------------------------------------------------------
 # Parameters
@@ -40,12 +47,12 @@ CMD_SCHEDULE = [
 BodyCmdPhase(0.0, 1.0,  0.7, 0.0, 0.27, 0.0),   # Forward 0.7 m/s
 BodyCmdPhase(1.0, 1.5,  0.0, 0.0, 0.27, 0.0),   # Stop
 BodyCmdPhase(1.5, 3.0,  0.0, 0.3, 0.27, 0.0),   # Sideway 0.3 m/s
-BodyCmdPhase(3.0, 4.0,  0.0, 0.0, 0.27, 0.0),   # Stop
-BodyCmdPhase(4.0, 6.0,  0.0, 0.0, 0.27, 2.0),   # Rotate 2 rad/s
-BodyCmdPhase(6.0, 6.5,  0.0, 0.0, 0.27, 0.0),   # Stop
-BodyCmdPhase(6.5, 8.0,  0.6, 0.0, 0.27, 2.0),   # Forward 0.6 m/s + Rotate 2 rad/s
-BodyCmdPhase(8.0, 9.0,  0.8, 0.0, 0.27, 0.0),   # Forward 0.8 m/s
-BodyCmdPhase(9.0, 10.0,  0.0, 0.0, 0.27, 0.0),  # Stop
+BodyCmdPhase(3.0, 4.0,  0.0, 0.0, 0.32, 0.0),   # Stop
+BodyCmdPhase(4.0, 6.0,  0.0, 0.0, 0.32, 2.0),   # Rotate 2 rad/s
+BodyCmdPhase(6.0, 6.5,  0.0, 0.0, 0.32, 0.0),   # Stop
+BodyCmdPhase(6.5, 8.0,  0.6, 0.0, 0.32, 2.0),   # Forward 0.6 m/s + Rotate 2 rad/s
+BodyCmdPhase(8.0, 9.0,  0.8, 0.0, 0.20, 0.0),   # Forward 0.8 m/s
+BodyCmdPhase(9.0, 10.0,  0.0, 0.0, 0.20, 0.0),  # Stop
 ]
 
 # Gait Setting
@@ -245,15 +252,33 @@ print(f"\nSimulation ended."
 # Simulation Results
 # --------------------------------------------------------------------------------
 
-# Plot results
+# Plot results and save to files
+print("\nGenerating plots...")
 t_vec = np.arange(LEG_CTRL_I_END) * LEG_CTRL_DT
+
+# Generate and save swing foot trajectory plot
 plot_swing_foot_traj(t_vec, foot_traj, False)
+plt.savefig(f"{OUTPUT_DIR}/swing_foot_trajectory.png", dpi=150, bbox_inches='tight')
+print(f"Saved: {OUTPUT_DIR}/swing_foot_trajectory.png")
+plt.close('all')
+
+# Generate and save MPC result plot
 plot_mpc_result(t_vec, mpc_force_world, tau_cmd, x_vec, block=False)
+plt.savefig(f"{OUTPUT_DIR}/mpc_results.png", dpi=150, bbox_inches='tight')
+print(f"Saved: {OUTPUT_DIR}/mpc_results.png")
+plt.close('all')
+
+# Generate and save solve time plot
 plot_solve_time(mpc_solve_time_ms, mpc_update_time_ms, MPC_DT, MPC_HZ, block=False)
+plt.savefig(f"{OUTPUT_DIR}/solve_time.png", dpi=150, bbox_inches='tight')
+print(f"Saved: {OUTPUT_DIR}/solve_time.png")
+plt.close('all')
+
+print(f"\nAll plots saved to '{OUTPUT_DIR}/' directory")
 
 # Replay simulation
+print("\nStarting MuJoCo replay...")
 mujoco_go2.replay_simulation(time_log_s, q_log, tau_log_Nm, RENDER_DT, REALTIME_FACTOR)
-hold_until_all_fig_closed()
 
 # Run simulation with optimal input
 # x0_col = go2.compute_com_x_vec()
